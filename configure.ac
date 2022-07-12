@@ -8,9 +8,14 @@ AM_INIT_AUTOMAKE([-Wall -Werror foreign 1.11.2])
 LT_INIT
 
 AC_PROG_CC
+AX_CHECK_COMPILE_FLAG([-std=gnu11], [
+    CFLAGS="$CFLAGS -std=gnu17"
+], [
+    echo "-std=gnu17 required"
+])
 PKG_CHECK_MODULES([CHECK], [check >= 0.9.6])
 AC_CONFIG_HEADERS([config.h])
-AC_CONFIG_FILES([Makefile src/Makefile])
+AC_CONFIG_FILES([Makefile src/Makefile tests/Makefile])
 
 DX_INIT_DOXYGEN([libwaftp])
 
