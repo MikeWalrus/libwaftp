@@ -29,9 +29,10 @@ void exec_server(void)
 
 	snprintf(ftp_anon_dir, buf_len, "FTP_ANON_DIR=%s/%s", cwd, SERVER_ROOT);
 	printf("starting: %s\n", program_name);
-	char *new_argv[] = { SERVER_PROGRAM, "-S", SERVER_PORT, NULL };
+	const char *const new_argv[] = { SERVER_PROGRAM, "-S", SERVER_PORT,
+		                         NULL };
 	putenv(ftp_anon_dir);
-	execvp(new_argv[0], new_argv);
+	execvp(new_argv[0], (char *const *)new_argv);
 	perror("execvp:");
 	exit(1);
 }
