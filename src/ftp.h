@@ -1,6 +1,8 @@
 #ifndef _FTP_H
 #define _FTP_H
 
+#include "socket_util.h"
+
 #define ERR_MSG_MAX_LEN 256
 
 struct UserPI {
@@ -8,6 +10,7 @@ struct UserPI {
 	const char *service;
 	struct addrinfo *addr_info;
 	int ctrl_fd;
+	struct RecvBuf rb;
 };
 
 /// Initialise a \a user_pi

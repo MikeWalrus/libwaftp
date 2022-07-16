@@ -21,6 +21,11 @@ ssize_t sendn(int fd, const void *buf, size_t n)
 	return n;
 }
 
+void recv_buf_init(struct RecvBuf *rb)
+{
+	rb->remain_count = 0;
+}
+
 /// Fills the receive buffer \a rb by calling recv().
 /**
  *  Only call this if everything previously stored in the buffer
@@ -60,14 +65,7 @@ static inline int recv_buf_get_char(struct RecvBuf *rb, int fd, char *c)
 	return 1;
 }
 
-/// Gets one line(ended by LF) from a socket \a fd using \rb.
-/**
- *  The LF is copied if received.
- *  The result \a line is always '\0' terminated.
- *  \return the length of \a line (without trailing '\0') on success
- *  0 when the connection is closed, or -1 otherwise.
- */
-ssize_t recv_buf_get_line(struct RecvBuf *rb, int fd, char *line)
+ssize_t recv_buf_get_line(struct RecvBuf *rb, int fd, unsigned char *line)
 {
 	int result;
 	ssize_t n;

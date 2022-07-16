@@ -1,6 +1,9 @@
+#include <assert.h>
+#include <ctype.h>
 #include <errno.h>
 #include <netdb.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,18 +13,39 @@
 
 #include "config.h"
 
+#include "cmd.h"
 #include "ftp.h"
-#include "socket_util.h"
+#include "telnet.h"
 
 #define CMD_BUF_LEN 2
 
-static int get_reply(int fd);
+enum GetReplyResult {
+	GET_REPLY_NETWORK_ERROR, // errno
+	GET_REPLY_TELNET_ERROR, // errno
+	GET_REPLY_CLOSED,
+	GET_REPLY_SYNTAX_ERROR,
+	GET_REPLY_OK
+};
+
+const char *get_reply_err_msg[] = {
+	[GET_REPLY_SYNTAX_ERROR] = "get_reply: Syntax error.",
+	[GET_REPLY_CLOSED] = "get_reply: Connection is closed.",
+	[GET_REPLY_TELNET_ERROR] = "get_reply: Cannot send a telnet command: ",
+	[GET_REPLY_NETWORK_ERROR] = "get_reply: Error while receiving reply: "
+};
+
+static enum GetReplyResult get_reply(int fd, struct RecvBuf *rb,
+                                     struct Reply *reply);
+
+void get_reply_result_to_err_msg(enum GetReplyResult result, char *err_msg,
+                                 size_t len);
 
 /// Send a command and get its primary reply.
 /**
  *  /return -1 on error.
  */
-static int send_command(int fd, char *err_msg, const char *fmt, ...)
+static int send_command(int fd, struct Reply *reply, char *err_msg,
+                        const char *fmt, ...)
 {
 	int ret = 0;
 	va_list args;
@@ -42,23 +66,124 @@ static int send_command(int fd, char *err_msg, const char *fmt, ...)
 
 	if (sendn(fd, cmd_buf, len) != 0) {
 		if (err_msg) {
-			ssize_t err_len = snprintf(err_msg, ERR_MSG_MAX_LEN,
-			                           "send_command: ");
+			strncpy(err_msg, __func__, ERR_MSG_MAX_LEN);
+			size_t err_len = sizeof(__func__);
 			strerror_r(errno, err_msg + err_len,
 			           ERR_MSG_MAX_LEN - err_len);
 		}
 		ret = -1;
 		goto clean_up;
 	}
-	// TODO: get_reply
+	struct RecvBuf rb;
+	recv_buf_init(&rb);
+	enum GetReplyResult result = get_reply(fd, &rb, reply);
+	if (result != GET_REPLY_OK) {
+		if (err_msg) {
+			strncpy(err_msg, __func__, ERR_MSG_MAX_LEN);
+			size_t err_len = sizeof(__func__);
+			get_reply_result_to_err_msg(result, err_msg + err_len,
+			                            LINE_MAX_LEN - err_len);
+		}
+		ret = -1;
+		goto clean_up;
+	}
 clean_up:
 	free(cmd_buf_bigger);
 	return ret;
 }
 
-static int get_reply(int fd)
+static enum GetReplyResult get_reply(int fd, struct RecvBuf *rb,
+                                     struct Reply *reply)
 {
-	// TODO
+	unsigned char line[LINE_MAX_LEN];
+	ssize_t len;
+	unsigned char *ptr;
+	unsigned char *end;
+
+#define GET_LINE()                                                             \
+	len = recv_buf_get_line(rb, fd, line);                                 \
+	if (len < 0)                                                           \
+		return GET_REPLY_NETWORK_ERROR;                                \
+	if (len == 0)                                                          \
+		return GET_REPLY_CLOSED;                                       \
+	assert(line[len - 1] ==                                                \
+	       '\n'); /* TODO: Not sure about this. Let's just crash first.*/  \
+	ptr = line;                                                            \
+	end = ptr + len;
+
+#define DEAL_WITH_TELNET_CMD()                                                 \
+	if (try_read_telnet_cmd_and_reply(&ptr, end, fd) < 0)                  \
+		return GET_REPLY_TELNET_ERROR;
+
+#define DEAL_WITH_TELNET_CMD_TILL_END()                                        \
+	ptr++;                                                                 \
+	while (ptr < end) {                                                    \
+		DEAL_WITH_TELNET_CMD();                                        \
+		ptr++;                                                         \
+	}
+
+#define DEAL_WITH_TELNET_CMD_WITH_CHECKS(action)                               \
+	if (ptr >= end)                                                        \
+		action;                                                        \
+	DEAL_WITH_TELNET_CMD();                                                \
+	if (ptr >= end)                                                        \
+		action;
+
+	GET_LINE();
+	for (size_t i = 0; i < 3; i++, ptr++) {
+		DEAL_WITH_TELNET_CMD_WITH_CHECKS(
+			return GET_REPLY_SYNTAX_ERROR;);
+		reply->reply_codes[i] = *ptr - '0';
+	}
+
+	DEAL_WITH_TELNET_CMD_WITH_CHECKS(return GET_REPLY_OK);
+	bool is_multi_line = *ptr == '-';
+	DEAL_WITH_TELNET_CMD_TILL_END();
+
+	if (!is_multi_line)
+		return GET_REPLY_OK;
+
+	// Oh, we have a multi-line reply!
+	for (;;) {
+		GET_LINE();
+		// Look for xyz<SP>, where x, y, z are digits.
+		for (size_t i = 0; i < 3; i++, ptr++) {
+			DEAL_WITH_TELNET_CMD_WITH_CHECKS(goto not_last_line);
+			if (!isdigit(*ptr)) {
+				DEAL_WITH_TELNET_CMD_TILL_END();
+				goto not_last_line;
+			}
+		}
+		DEAL_WITH_TELNET_CMD_WITH_CHECKS(goto not_last_line);
+		bool is_space = *ptr == ' ';
+		DEAL_WITH_TELNET_CMD_TILL_END();
+		if (!is_space)
+			goto not_last_line;
+		break;
+	not_last_line:
+		continue;
+	}
+
+	return GET_REPLY_OK;
+
+#undef DEAL_WITH_TELNET_CMD_TILL_END
+#undef DEAL_WITH_TELNET_CMD
+#undef DEAL_WITH_TELNET_CMD_WITH_CHECKS
+#undef GET_LINE
+}
+
+void get_reply_result_to_err_msg(enum GetReplyResult result, char *err_msg,
+                                 size_t len)
+{
+	const char *first_part = get_reply_err_msg[result];
+	ssize_t first_part_len = strlen(first_part);
+	strncpy(err_msg, get_reply_err_msg[result], len);
+
+	bool errno_involved = result == GET_REPLY_TELNET_ERROR ||
+	                      result == GET_REPLY_NETWORK_ERROR;
+	if (errno_involved)
+		strerror_r(errno, err_msg + len, len - first_part_len);
+	err_msg[len - 1] = 0;
 }
 
 static int getaddrinfo_ftp(const char *name, const char *service,
