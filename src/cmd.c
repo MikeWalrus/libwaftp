@@ -235,17 +235,19 @@ int perform_login_sequence(struct LoginInfo *l, int fd, struct RecvBuf *rb,
         +---+           +---+------------->+---+
 	*/
 
-	// USER cmd
-	if (!l->username) {
-		ERR_PRINTF("A username must be provided.");
-		goto fail;
-	}
 	struct Reply reply;
 	const char *cmd;
+	const char *info;
+	enum ReplyCode1 first;
+	// USER cmd
+	if (!l->username) {
+		info = "A username";
+		goto info_needed;
+	}
 	if (send_command(fd, &reply, err, "USER %s", l->username) < 0)
 		return -1;
 	cmd = "USER";
-	enum ReplyCode1 first = reply.first;
+	first = reply.first;
 	if (first == POS_COM)
 		goto succeed;
 	if (first == POS_PRE)
@@ -268,6 +270,10 @@ int perform_login_sequence(struct LoginInfo *l, int fd, struct RecvBuf *rb,
 
 	// PASS cmd
 	debug("[INFO] Password needed to login.");
+	if (!l->password) {
+		info = "Your password";
+		goto info_needed;
+	}
 	if (send_command(fd, &reply, err, "PASS %s", l->password) < 0)
 		return -1;
 	cmd = "PASS";
@@ -291,7 +297,11 @@ int perform_login_sequence(struct LoginInfo *l, int fd, struct RecvBuf *rb,
 
 	// ACCT cmd
 	debug("[INFO] Account information needed to login.");
-	if (send_command(fd, &reply, err, "ACCT %s", l->password) < 0)
+	if (!l->account_info) {
+		info = "Your account information";
+		goto info_needed;
+	}
+	if (send_command(fd, &reply, err, "ACCT %s", l->account_info) < 0)
 		return -1;
 	cmd = "ACCT";
 	first = reply.first;
@@ -308,6 +318,9 @@ int perform_login_sequence(struct LoginInfo *l, int fd, struct RecvBuf *rb,
 	}
 
 	return 0;
+info_needed:
+	ERR_PRINTF_REPLY(reply, "%s is needed to log into this server.", info);
+	goto fail;
 error:
 	ERR_PRINTF_REPLY(
 		reply,
