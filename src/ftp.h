@@ -3,13 +3,6 @@
 
 #include "socket_util.h"
 
-struct ErrMsg {
-#define ERR_MSG_MAX_LEN 256
-#define ERR_MSG_WHERE_MAX_LEN 64
-	char where[ERR_MSG_WHERE_MAX_LEN];
-	char msg[ERR_MSG_MAX_LEN];
-};
-
 struct UserPI {
 	const char *name;
 	const char *service;
@@ -17,6 +10,8 @@ struct UserPI {
 	int ctrl_fd;
 	struct RecvBuf rb;
 };
+
+struct ErrMsg;
 
 /// Initialise a \a user_pi
 /**

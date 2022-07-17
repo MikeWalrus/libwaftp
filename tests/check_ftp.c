@@ -1,3 +1,4 @@
+#include "../src/error.h"
 #include "../src/ftp.h"
 #include "config.h"
 

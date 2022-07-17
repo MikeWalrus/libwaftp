@@ -28,4 +28,18 @@ struct Reply {
 	};
 };
 
+struct ErrMsg;
+struct RecvBuf;
+
+#define CMD_BUF_LEN 64
+
+/// Send a command and get its primary reply.
+/**
+ *  /return -1 on error.
+ */
+int send_command(int fd, struct Reply *reply, struct ErrMsg *err,
+                 const char *fmt, ...);
+
+int get_connection_greetings(int fd, struct RecvBuf *rb, struct ErrMsg *err);
+
 #endif
