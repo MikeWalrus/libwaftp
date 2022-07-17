@@ -75,12 +75,15 @@ ssize_t recv_buf_get_line(struct RecvBuf *rb, int fd, unsigned char *line)
 			*line++ = c;
 			if (c == '\n')
 				break;
-		} else if (result == 0) {
+			continue;
+		}
+		if (result == 0) {
 			*line = 0;
 			return n - 1;
 		}
 		return -1;
 	}
 	*line = 0;
+	n++;
 	return n;
 }

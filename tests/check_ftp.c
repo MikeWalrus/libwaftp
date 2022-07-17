@@ -63,19 +63,19 @@ struct UserPI user_pi;
 
 void check_user_pi_init_invalid(const char *name, const char *service)
 {
-	char err_msg[ERR_MSG_MAX_LEN];
+	struct ErrMsg err;
 	struct UserPI *user_pi_result =
-		user_pi_init(name, service, &user_pi, err_msg);
+		user_pi_init(name, service, &user_pi, &err);
 	ck_assert(user_pi_result != &user_pi);
 }
 
 void check_user_pi_init_valid(const char *name, const char *service)
 {
-	char err_msg[ERR_MSG_MAX_LEN];
-	err_msg[ERR_MSG_MAX_LEN - 1] = 0;
+	struct ErrMsg err;
 	struct UserPI *user_pi_result =
-		user_pi_init(name, service, &user_pi, err_msg);
-	ck_assert_msg(user_pi_result == &user_pi, "%s", err_msg);
+		user_pi_init(name, service, &user_pi, &err);
+	ck_assert_msg(user_pi_result == &user_pi, "[%s] %s", err.where,
+	              err.msg);
 	ck_assert(user_pi.ctrl_fd > 0);
 }
 

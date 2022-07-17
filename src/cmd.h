@@ -6,7 +6,7 @@ enum ReplyCode1 {
 	POS_COM = 2, /// Positive Completion Reply
 	POS_INT = 3, /// Positive Intermediate Reply
 	NEG_TRAN_COM = 4, /// Transient Negative Reply
-	NEG_PERM_COM = 5, /// Permanet Negative Reply
+	NEG_PERM_COM = 5, /// Permanent Negative Reply
 };
 
 enum ReplyCode2 {

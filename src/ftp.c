@@ -12,12 +12,21 @@
 #include <unistd.h>
 
 #include "config.h"
+#include "debug.h"
 
 #include "cmd.h"
 #include "ftp.h"
 #include "telnet.h"
 
-#define CMD_BUF_LEN 2
+#define CMD_BUF_LEN 64
+
+#define ERR_WHERE()                                                            \
+	strcpy(err->where, __func__);                                          \
+	_Static_assert(sizeof(__func__) <= ERR_MSG_WHERE_MAX_LEN,              \
+	               "Function name too long.");
+
+#define ERR_PRINTF(fmt, ...)                                                   \
+	snprintf(err->msg, ERR_MSG_MAX_LEN, fmt, __VA_ARGS__);
 
 enum GetReplyResult {
 	GET_REPLY_NETWORK_ERROR, // errno
@@ -40,11 +49,14 @@ static enum GetReplyResult get_reply(int fd, struct RecvBuf *rb,
 void get_reply_result_to_err_msg(enum GetReplyResult result, char *err_msg,
                                  size_t len);
 
+static int get_connection_greetings(int fd, struct RecvBuf *rb,
+                                    struct ErrMsg *err);
+
 /// Send a command and get its primary reply.
 /**
  *  /return -1 on error.
  */
-static int send_command(int fd, struct Reply *reply, char *err_msg,
+static int send_command(int fd, struct Reply *reply, struct ErrMsg *err,
                         const char *fmt, ...)
 {
 	int ret = 0;
@@ -65,31 +77,23 @@ static int send_command(int fd, struct Reply *reply, char *err_msg,
 	va_end(args);
 
 	if (sendn(fd, cmd_buf, len) != 0) {
-		if (err_msg) {
-			strncpy(err_msg, __func__, ERR_MSG_MAX_LEN);
-			size_t err_len = sizeof(__func__);
-			strerror_r(errno, err_msg + err_len,
-			           ERR_MSG_MAX_LEN - err_len);
-		}
-		ret = -1;
-		goto clean_up;
+		strerror_r(errno, err->msg, ERR_MSG_MAX_LEN);
+		goto fail;
 	}
 	struct RecvBuf rb;
 	recv_buf_init(&rb);
 	enum GetReplyResult result = get_reply(fd, &rb, reply);
 	if (result != GET_REPLY_OK) {
-		if (err_msg) {
-			strncpy(err_msg, __func__, ERR_MSG_MAX_LEN);
-			size_t err_len = sizeof(__func__);
-			get_reply_result_to_err_msg(result, err_msg + err_len,
-			                            LINE_MAX_LEN - err_len);
-		}
-		ret = -1;
-		goto clean_up;
+		get_reply_result_to_err_msg(result, err->msg, LINE_MAX_LEN);
+		goto fail;
 	}
 clean_up:
 	free(cmd_buf_bigger);
 	return ret;
+fail:
+	ret = -1;
+	ERR_WHERE();
+	goto clean_up;
 }
 
 static enum GetReplyResult get_reply(int fd, struct RecvBuf *rb,
@@ -106,6 +110,7 @@ static enum GetReplyResult get_reply(int fd, struct RecvBuf *rb,
 		return GET_REPLY_NETWORK_ERROR;                                \
 	if (len == 0)                                                          \
 		return GET_REPLY_CLOSED;                                       \
+	debug("%s", line);                                                     \
 	assert(line[len - 1] ==                                                \
 	       '\n'); /* TODO: Not sure about this. Let's just crash first.*/  \
 	ptr = line;                                                            \
@@ -214,26 +219,59 @@ static int addrinfo_connect(struct addrinfo *addr_info)
 }
 
 struct UserPI *user_pi_init(const char *name, const char *service,
-                            struct UserPI *user_pi, char *err_msg)
+                            struct UserPI *user_pi, struct ErrMsg *err)
 {
 	int n;
 	struct addrinfo *addr_info;
 	if ((n = getaddrinfo_ftp(name, service, &addr_info)) != 0) {
-		snprintf(err_msg, ERR_MSG_MAX_LEN, "getaddrinfo: %s",
-		         gai_strerror(n));
-		return NULL;
+		ERR_PRINTF("getaddrinfo: %s", gai_strerror(n));
+		goto fail;
 	}
 	int fd = addrinfo_connect(addr_info);
 	if (fd <= 0) {
-		snprintf(err_msg, ERR_MSG_MAX_LEN,
-		         "user_pi_init: Cannot connect to %s, %s", name,
-		         service);
+		ERR_PRINTF("Cannot connect to %s, %s", name, service);
 		freeaddrinfo(addr_info);
-		return NULL;
+		goto fail;
 	}
 	*user_pi = (struct UserPI){ .addr_info = addr_info,
 		                    .name = name,
 		                    .service = service,
 		                    .ctrl_fd = fd };
+	recv_buf_init(&user_pi->rb);
+	if (get_connection_greetings(user_pi->ctrl_fd, &user_pi->rb, err) != 0)
+		return NULL;
 	return user_pi;
+fail:
+	ERR_WHERE();
+	return NULL;
+}
+
+static int get_connection_greetings(int fd, struct RecvBuf *rb,
+                                    struct ErrMsg *err)
+{
+	for (;;) {
+		struct Reply reply;
+		enum GetReplyResult result = get_reply(fd, rb, &reply);
+		if (result != GET_REPLY_OK) {
+			get_reply_result_to_err_msg(result, err->msg,
+			                            ERR_MSG_MAX_LEN);
+			goto fail;
+		}
+		enum ReplyCode1 first = reply.first;
+		if (first == POS_PRE)
+			continue;
+		if (first == POS_COM)
+			return 0;
+		if (first == NEG_TRAN_COM) {
+			ERR_PRINTF("The server says it's unavailable. (%d%d%d)",
+			           reply.first, reply.second, reply.third);
+			goto fail;
+		}
+		ERR_PRINTF("Unexpected reply. (%d%d%d)",
+		           reply.first, reply.second, reply.third);
+		goto fail;
+	}
+fail:
+	ERR_WHERE();
+	return -1;
 }
