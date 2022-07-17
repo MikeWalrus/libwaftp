@@ -28,6 +28,9 @@
 #define ERR_PRINTF(fmt, ...)                                                   \
 	snprintf(err->msg, ERR_MSG_MAX_LEN, fmt, __VA_ARGS__);
 
+#define ERR_WHERE_PRINTF(fmt, ...)                                             \
+	snprintf(err->where, ERR_MSG_WHERE_MAX_LEN, fmt, __VA_ARGS__);
+
 enum GetReplyResult {
 	GET_REPLY_NETWORK_ERROR, // errno
 	GET_REPLY_TELNET_ERROR, // errno
@@ -91,8 +94,8 @@ clean_up:
 	free(cmd_buf_bigger);
 	return ret;
 fail:
+	ERR_WHERE_PRINTF("%s(%s)", __func__, cmd_buf);
 	ret = -1;
-	ERR_WHERE();
 	goto clean_up;
 }
 
@@ -267,8 +270,8 @@ static int get_connection_greetings(int fd, struct RecvBuf *rb,
 			           reply.first, reply.second, reply.third);
 			goto fail;
 		}
-		ERR_PRINTF("Unexpected reply. (%d%d%d)",
-		           reply.first, reply.second, reply.third);
+		ERR_PRINTF("Unexpected reply. (%d%d%d)", reply.first,
+		           reply.second, reply.third);
 		goto fail;
 	}
 fail:
