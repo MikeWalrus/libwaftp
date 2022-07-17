@@ -28,6 +28,12 @@ struct Reply {
 	};
 };
 
+struct LoginInfo {
+	const char *username;
+	const char *password;
+	const char *account_info;
+};
+
 struct ErrMsg;
 struct RecvBuf;
 
@@ -40,6 +46,10 @@ struct RecvBuf;
 int send_command(int fd, struct Reply *reply, struct ErrMsg *err,
                  const char *fmt, ...);
 
+/// Wait for the server to send a bunch of welcome messages and let us send command.
+/**
+ *  /return -1 on error.
+ */
 int get_connection_greetings(int fd, struct RecvBuf *rb, struct ErrMsg *err);
 
 #endif

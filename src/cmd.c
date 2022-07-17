@@ -13,6 +13,10 @@
 #include "ftp.h"
 #include "telnet.h"
 
+#define ERR_PRINTF_REPLY(reply, fmt, ...)                                      \
+	ERR_PRINTF(fmt " (%d%d%d)", ##__VA_ARGS__, reply.first, reply.second,  \
+	           reply.third)
+
 enum GetReplyResult {
 	GET_REPLY_NETWORK_ERROR, // errno
 	GET_REPLY_TELNET_ERROR, // errno
@@ -58,6 +62,7 @@ int send_command(int fd, struct Reply *reply, struct ErrMsg *err,
 		strerror_r(errno, err->msg, ERR_MSG_MAX_LEN);
 		goto fail;
 	}
+	debug("---->%s", cmd_buf);
 	struct RecvBuf rb;
 	recv_buf_init(&rb);
 	enum GetReplyResult result = get_reply(fd, &rb, reply);
@@ -88,7 +93,7 @@ static enum GetReplyResult get_reply(int fd, struct RecvBuf *rb,
 		return GET_REPLY_NETWORK_ERROR;                                \
 	if (len == 0)                                                          \
 		return GET_REPLY_CLOSED;                                       \
-	debug("%s", line);                                                     \
+	debug("---->%s", line);                                                \
 	assert(line[len - 1] ==                                                \
 	       '\n'); /* TODO: Not sure about this. Let's just crash first.*/  \
 	ptr = line;                                                            \
@@ -185,15 +190,134 @@ int get_connection_greetings(int fd, struct RecvBuf *rb, struct ErrMsg *err)
 		if (first == POS_COM)
 			return 0;
 		if (first == NEG_TRAN_COM) {
-			ERR_PRINTF("The server says it's unavailable. (%d%d%d)",
-			           reply.first, reply.second, reply.third);
+			ERR_PRINTF_REPLY(reply,
+			                 "The server says it's unavailable.")
 			goto fail;
 		}
-		ERR_PRINTF("Unexpected reply. (%d%d%d)", reply.first,
-		           reply.second, reply.third);
+		ERR_PRINTF_REPLY(reply, "Unexpected reply.");
 		goto fail;
 	}
 fail:
 	ERR_WHERE();
 	return -1;
+}
+
+int perform_login_sequence(struct LoginInfo *l, int fd, struct RecvBuf *rb,
+                           struct ErrMsg *err)
+{
+	/*
+	RFC 959 Page 57:
+                              1
+        +---+   USER    +---+------------->+---+
+        | B |---------->| W | 2       ---->| E |
+        +---+           +---+------  |  -->+---+
+                         | |       | | |
+                       3 | | 4,5   | | |
+           --------------   -----  | | |
+          |                      | | | |
+          |                      | | | |
+          |                 ---------  |
+          |               1|     | |   |
+          V                |     | |   |
+        +---+   PASS    +---+ 2  |  ------>+---+
+        |   |---------->| W |------------->| S |
+        +---+           +---+   ---------->+---+
+                         | |   | |     |
+                       3 | |4,5| |     |
+           --------------   --------   |
+          |                    | |  |  |
+          |                    | |  |  |
+          |                 -----------
+          |             1,3|   | |  |
+          V                |  2| |  |
+        +---+   ACCT    +---+--  |   ----->+---+
+        |   |---------->| W | 4,5 -------->| F |
+        +---+           +---+------------->+---+
+	*/
+
+	// USER cmd
+	if (!l->username) {
+		ERR_PRINTF("A username must be provided.");
+		goto fail;
+	}
+	struct Reply reply;
+	const char *cmd;
+	if (send_command(fd, &reply, err, "USER %s", l->username) < 0)
+		return -1;
+	cmd = "USER";
+	enum ReplyCode1 first = reply.first;
+	if (first == POS_COM)
+		goto succeed;
+	if (first == POS_PRE)
+		goto error;
+	if (first == NEG_TRAN_COM || first == NEG_PERM_COM) {
+		ERR_PRINTF_REPLY(
+			reply,
+			"Failure: Login failed after sending the username \"%s\".",
+			l->username);
+		// TODO: Extract more information from the reply.
+		goto fail;
+	}
+	if (first != POS_INT) {
+		ERR_PRINTF_REPLY(
+			reply,
+			"Unexpected reply after sending the username \"%s\".",
+			l->username);
+		goto fail;
+	}
+
+	// PASS cmd
+	debug("[INFO] Password needed to login.");
+	if (send_command(fd, &reply, err, "PASS %s", l->password) < 0)
+		return -1;
+	cmd = "PASS";
+	first = reply.first;
+	if (first == POS_COM)
+		goto succeed;
+	if (first == POS_PRE)
+		goto error;
+	if (first == NEG_TRAN_COM || first == NEG_PERM_COM) {
+		ERR_PRINTF_REPLY(
+			reply,
+			"Failure: Login failed after sending the password.");
+		// TODO: Extract more information from the reply.
+		goto fail;
+	}
+	if (first != POS_INT) {
+		ERR_PRINTF_REPLY(
+			reply, "Unexpected reply after sending the password.");
+		goto fail;
+	}
+
+	// ACCT cmd
+	debug("[INFO] Account information needed to login.");
+	if (send_command(fd, &reply, err, "ACCT %s", l->password) < 0)
+		return -1;
+	cmd = "ACCT";
+	first = reply.first;
+	if (first == POS_COM)
+		goto succeed;
+	if (first == POS_PRE || first == POS_INT)
+		goto error;
+	if (first == NEG_TRAN_COM || first == NEG_PERM_COM) {
+		ERR_PRINTF_REPLY(
+			reply,
+			"Failure: Login failed after sending the account information.");
+		// TODO: Extract more information from the reply.
+		goto fail;
+	}
+
+	return 0;
+error:
+	ERR_PRINTF_REPLY(
+		reply,
+		"Error: The server shouldn't send this reply to my %s command.",
+		cmd);
+fail:
+	debug("[WARNING] Login failed.");
+	ERR_WHERE();
+	return -1;
+succeed:
+	debug("[INFO] Login succeeded.");
+	return 0;
 }

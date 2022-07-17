@@ -1,8 +1,8 @@
 #ifndef _ERROR_H
 #define _ERROR_H
 
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
 
 struct ErrMsg {
 #define ERR_MSG_MAX_LEN 256
@@ -17,9 +17,9 @@ struct ErrMsg {
 	               "Function name too long.");
 
 #define ERR_PRINTF(fmt, ...)                                                   \
-	snprintf(err->msg, ERR_MSG_MAX_LEN, fmt, __VA_ARGS__);
+	snprintf(err->msg, ERR_MSG_MAX_LEN, fmt, ##__VA_ARGS__);
 
 #define ERR_WHERE_PRINTF(fmt, ...)                                             \
-	snprintf(err->where, ERR_MSG_WHERE_MAX_LEN, fmt, __VA_ARGS__);
+	snprintf(err->where, ERR_MSG_WHERE_MAX_LEN, fmt, ##__VA_ARGS__);
 
 #endif
