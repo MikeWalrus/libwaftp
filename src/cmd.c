@@ -58,11 +58,11 @@ int send_command(int fd, struct Reply *reply, struct ErrMsg *err,
 	strcpy(&cmd_buf[len], "\r\n");
 	va_end(args);
 
-	if (sendn(fd, cmd_buf, len) != 0) {
+	if (sendn(fd, cmd_buf, len + 2) != len + 2) {
 		strerror_r(errno, err->msg, ERR_MSG_MAX_LEN);
 		goto fail;
 	}
-	debug("---->%s", cmd_buf);
+	debug("[O] %s", cmd_buf);
 	struct RecvBuf rb;
 	recv_buf_init(&rb);
 	enum GetReplyResult result = get_reply(fd, &rb, reply);
@@ -93,7 +93,7 @@ static enum GetReplyResult get_reply(int fd, struct RecvBuf *rb,
 		return GET_REPLY_NETWORK_ERROR;                                \
 	if (len == 0)                                                          \
 		return GET_REPLY_CLOSED;                                       \
-	debug("---->%s", line);                                                \
+	debug("[I] %s", line);                                                 \
 	assert(line[len - 1] ==                                                \
 	       '\n'); /* TODO: Not sure about this. Let's just crash first.*/  \
 	ptr = line;                                                            \
@@ -202,8 +202,8 @@ fail:
 	return -1;
 }
 
-int perform_login_sequence(struct LoginInfo *l, int fd, struct RecvBuf *rb,
-                           struct ErrMsg *err)
+int perform_login_sequence(const struct LoginInfo *l, int fd,
+                           struct RecvBuf *rb, struct ErrMsg *err)
 {
 	/*
 	RFC 959 Page 57:
@@ -269,7 +269,7 @@ int perform_login_sequence(struct LoginInfo *l, int fd, struct RecvBuf *rb,
 	}
 
 	// PASS cmd
-	debug("[INFO] Password needed to login.");
+	debug("[INFO] Password needed to login.\n");
 	if (!l->password) {
 		info = "Your password";
 		goto info_needed;
@@ -296,7 +296,7 @@ int perform_login_sequence(struct LoginInfo *l, int fd, struct RecvBuf *rb,
 	}
 
 	// ACCT cmd
-	debug("[INFO] Account information needed to login.");
+	debug("[INFO] Account information needed to login.\n");
 	if (!l->account_info) {
 		info = "Your account information";
 		goto info_needed;
@@ -327,10 +327,10 @@ error:
 		"Error: The server shouldn't send this reply to my %s command.",
 		cmd);
 fail:
-	debug("[WARNING] Login failed.");
+	debug("[WARNING] Login failed.\n");
 	ERR_WHERE();
 	return -1;
 succeed:
-	debug("[INFO] Login succeeded.");
+	debug("[INFO] Login succeeded.\n");
 	return 0;
 }

@@ -15,7 +15,13 @@ const char SERVER_IP_V4[] = "127.0.0.1";
 const char SERVER_IP_V6[] = "::";
 const char SERVER_PORT[] = "12345";
 const char SERVER_PROGRAM[] = "pure-ftpd";
-const char SERVER_ROOT[] = "ftp-root";
+const char SERVER_ROOT[] = "server/ftp-root";
+
+const struct LoginInfo anonymous = {
+	.username = "anonymous",
+	.password = "",
+	.account_info = "",
+};
 
 static pid_t server_pid;
 
@@ -66,7 +72,7 @@ void check_user_pi_init_invalid(const char *name, const char *service)
 {
 	struct ErrMsg err;
 	struct UserPI *user_pi_result =
-		user_pi_init(name, service, &user_pi, &err);
+		user_pi_init(name, service, &anonymous, &user_pi, &err);
 	ck_assert(user_pi_result != &user_pi);
 }
 
@@ -74,7 +80,7 @@ void check_user_pi_init_valid(const char *name, const char *service)
 {
 	struct ErrMsg err;
 	struct UserPI *user_pi_result =
-		user_pi_init(name, service, &user_pi, &err);
+		user_pi_init(name, service, &anonymous, &user_pi, &err);
 	ck_assert_msg(user_pi_result == &user_pi, "[%s] %s", err.where,
 	              err.msg);
 	ck_assert(user_pi.ctrl_fd > 0);

@@ -1,6 +1,8 @@
-#include "socket_util.h"
 #include <errno.h>
 #include <sys/socket.h>
+
+#include "debug.h"
+#include "socket_util.h"
 
 ssize_t sendn(int fd, const void *buf, size_t n)
 {
@@ -9,7 +11,7 @@ ssize_t sendn(int fd, const void *buf, size_t n)
 	ssize_t n_written;
 
 	while (n_remain) {
-		if ((n_written = send(fd, p, n_remain, MSG_NOSIGNAL) <= 0)) {
+		if ((n_written = send(fd, p, n_remain, MSG_NOSIGNAL)) <= 0) {
 			if (n_written < 0 && errno == EINTR)
 				n_written = 0; /* we need to send() again */
 			else

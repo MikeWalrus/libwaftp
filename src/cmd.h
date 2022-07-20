@@ -52,4 +52,7 @@ int send_command(int fd, struct Reply *reply, struct ErrMsg *err,
  */
 int get_connection_greetings(int fd, struct RecvBuf *rb, struct ErrMsg *err);
 
+int perform_login_sequence(const struct LoginInfo *l, int fd,
+                           struct RecvBuf *rb, struct ErrMsg *err);
+
 #endif

@@ -41,6 +41,7 @@ static int addrinfo_connect(struct addrinfo *addr_info)
 }
 
 struct UserPI *user_pi_init(const char *name, const char *service,
+                            const struct LoginInfo *login,
                             struct UserPI *user_pi, struct ErrMsg *err)
 {
 	int n;
@@ -62,6 +63,9 @@ struct UserPI *user_pi_init(const char *name, const char *service,
 	recv_buf_init(&user_pi->rb);
 	if (get_connection_greetings(user_pi->ctrl_fd, &user_pi->rb, err) != 0)
 		return NULL;
+	if (perform_login_sequence(login, fd, &user_pi->rb, err) != 0)
+		return NULL;
+
 	return user_pi;
 fail:
 	ERR_WHERE();
