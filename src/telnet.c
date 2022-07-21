@@ -6,7 +6,10 @@
 #include "socket_util.h"
 #include "telnet.h"
 
-int send_telnet_negotiation(int fd, unsigned char cmd, unsigned char option)
+/**
+ *  \return On error, returns -1 and sets errno.
+ */
+static int send_telnet_negotiation(int fd, unsigned char cmd, unsigned char option)
 {
 	char cmd_structure[] = { IAC, cmd, option };
 	ssize_t n = sendn(fd, cmd_structure, sizeof(cmd_structure));

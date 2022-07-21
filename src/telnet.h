@@ -7,11 +7,6 @@
 
 #define MAX_TELNET_BUF_LEN 1024
 
-/**
- *  \return On error, returns -1 and sets errno.
- */
-int send_telnet_negotiation(int fd, unsigned char cmd, unsigned char option);
-
 struct Reply;
 #define SHORT_REPLY_MAX_LEN 128
 
