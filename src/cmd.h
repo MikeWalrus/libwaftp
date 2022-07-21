@@ -1,6 +1,8 @@
 #ifndef _CMD_H
 #define _CMD_H
 
+#include "telnet.h"
+
 enum ReplyCode1 {
 	POS_PRE = 1, /// Positive Preliminary Reply
 	POS_COM = 2, /// Positive Completion Reply
@@ -26,6 +28,10 @@ struct Reply {
 		};
 		unsigned int reply_codes[3];
 	};
+	char reply[MAX_TELNET_BUF_LEN];
+	ssize_t len;
+	char short_reply[SHORT_REPLY_MAX_LEN];
+	size_t short_reply_len;
 };
 
 struct LoginInfo {
@@ -54,5 +60,16 @@ int get_connection_greetings(int fd, struct RecvBuf *rb, struct ErrMsg *err);
 
 int perform_login_sequence(const struct LoginInfo *l, int fd,
                            struct RecvBuf *rb, struct ErrMsg *err);
+
+#define DECL_SEND_CMD(name, cmd)                                               \
+	static inline int send_##name(int fd, struct Reply *reply,             \
+	                              struct ErrMsg *err)                      \
+	{                                                                      \
+		return send_command(fd, reply, err, cmd);                      \
+	}
+
+DECL_SEND_CMD(pasv, "PASV");
+
+#undef DECL_SEND_CMD
 
 #endif

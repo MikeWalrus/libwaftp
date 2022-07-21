@@ -79,13 +79,28 @@ fail:
 	goto clean_up;
 }
 
+/// Look for xyz-, where x, y, z are digits.
+static bool is_reply_multi_line(char short_reply[4], size_t len)
+{
+	if (4 > len)
+		return false;
+	return short_reply[3] == '-';
+}
+
+/// Look for xyz<SP>, where x, y, z are digits.
+static bool is_reply_multi_line_last(char short_reply[4], size_t len)
+{
+	if (4 > len)
+		return false;
+	return short_reply[3] == ' ';
+}
+
 static enum GetReplyResult get_reply(int fd, struct RecvBuf *rb,
                                      struct Reply *reply)
 {
+	reply->len = 0;
 	unsigned char line[LINE_MAX_LEN];
 	ssize_t len;
-	unsigned char *ptr;
-	unsigned char *end;
 
 #define GET_LINE()                                                             \
 	len = recv_buf_get_line(rb, fd, line);                                 \
@@ -96,67 +111,28 @@ static enum GetReplyResult get_reply(int fd, struct RecvBuf *rb,
 	debug("[I] %s", line);                                                 \
 	assert(line[len - 1] ==                                                \
 	       '\n'); /* TODO: Not sure about this. Let's just crash first.*/  \
-	ptr = line;                                                            \
-	end = ptr + len;
-
-#define DEAL_WITH_TELNET_CMD()                                                 \
-	if (try_read_telnet_cmd_and_reply(&ptr, end, fd) < 0)                  \
+	if (copy_from_telnet_line(fd, line, len, reply) < 0)                   \
 		return GET_REPLY_TELNET_ERROR;
 
-#define DEAL_WITH_TELNET_CMD_TILL_END()                                        \
-	ptr++;                                                                 \
-	while (ptr < end) {                                                    \
-		DEAL_WITH_TELNET_CMD();                                        \
-		ptr++;                                                         \
-	}
-
-#define DEAL_WITH_TELNET_CMD_WITH_CHECKS(action)                               \
-	if (ptr >= end)                                                        \
-		action;                                                        \
-	DEAL_WITH_TELNET_CMD();                                                \
-	if (ptr >= end)                                                        \
-		action;
-
 	GET_LINE();
-	for (size_t i = 0; i < 3; i++, ptr++) {
-		DEAL_WITH_TELNET_CMD_WITH_CHECKS(
-			return GET_REPLY_SYNTAX_ERROR;);
-		reply->reply_codes[i] = *ptr - '0';
+	for (size_t i = 0; i < 3; i++) {
+		if (i + 1 > reply->len)
+			return GET_REPLY_SYNTAX_ERROR;
+		reply->reply_codes[i] = reply->reply[i] - '0';
 	}
-
-	DEAL_WITH_TELNET_CMD_WITH_CHECKS(return GET_REPLY_OK);
-	bool is_multi_line = *ptr == '-';
-	DEAL_WITH_TELNET_CMD_TILL_END();
-
-	if (!is_multi_line)
+	if (!is_reply_multi_line(reply->short_reply, reply->short_reply_len))
 		return GET_REPLY_OK;
 
 	// Oh, we have a multi-line reply!
 	for (;;) {
 		GET_LINE();
-		// Look for xyz<SP>, where x, y, z are digits.
-		for (size_t i = 0; i < 3; i++, ptr++) {
-			DEAL_WITH_TELNET_CMD_WITH_CHECKS(goto not_last_line);
-			if (!isdigit(*ptr)) {
-				DEAL_WITH_TELNET_CMD_TILL_END();
-				goto not_last_line;
-			}
-		}
-		DEAL_WITH_TELNET_CMD_WITH_CHECKS(goto not_last_line);
-		bool is_space = *ptr == ' ';
-		DEAL_WITH_TELNET_CMD_TILL_END();
-		if (!is_space)
-			goto not_last_line;
-		break;
-	not_last_line:
-		continue;
+		if (is_reply_multi_line_last(reply->short_reply,
+		                             reply->short_reply_len))
+			break;
 	}
 
 	return GET_REPLY_OK;
 
-#undef DEAL_WITH_TELNET_CMD_TILL_END
-#undef DEAL_WITH_TELNET_CMD
-#undef DEAL_WITH_TELNET_CMD_WITH_CHECKS
 #undef GET_LINE
 }
 
@@ -333,4 +309,15 @@ fail:
 succeed:
 	debug("[INFO] Login succeeded.\n");
 	return 0;
+}
+
+int set_transfer_parameters(int fd, struct RecvBuf *rb, struct ErrMsg *err)
+{
+	struct Reply reply;
+	if (send_pasv(fd, &reply, err) < 0)
+		return -1;
+	return 0;
+fail:
+	ERR_WHERE();
+	return -1;
 }
