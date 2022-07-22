@@ -9,7 +9,8 @@
 /**
  *  \return On error, returns -1 and sets errno.
  */
-static int send_telnet_negotiation(int fd, unsigned char cmd, unsigned char option)
+static int send_telnet_negotiation(int fd, unsigned char cmd,
+                                   unsigned char option)
 {
 	char cmd_structure[] = { IAC, cmd, option };
 	ssize_t n = sendn(fd, cmd_structure, sizeof(cmd_structure));
@@ -78,5 +79,6 @@ int copy_from_telnet_line(int fd, const unsigned char *line, size_t len,
 	}
 end:
 	reply->len = dest - reply->reply;
+	reply->short_reply[reply->short_reply_len] = '\0';
 	return 0;
 }
