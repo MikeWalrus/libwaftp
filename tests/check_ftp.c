@@ -83,7 +83,8 @@ void check_user_pi_init_valid(const char *name, const char *service)
 		user_pi_init(name, service, &anonymous, &user_pi, &err);
 	ck_assert_msg(user_pi_result == &user_pi, "[%s] %s", err.where,
 	              err.msg);
-	ck_assert(user_pi.ctrl_fd > 0);
+	ck_assert_int_gt(user_pi.ctrl.fd, 0);
+	ck_assert_int_gt(user_pi.data.fd, 0);
 }
 
 void setup(void)

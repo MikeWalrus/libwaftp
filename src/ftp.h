@@ -4,12 +4,18 @@
 #include "cmd.h"
 #include "socket_util.h"
 
-struct UserPI {
+struct Connection {
 	const char *name;
 	const char *service;
 	struct addrinfo *addr_info;
-	int ctrl_fd;
+	int fd;
+};
+
+struct UserPI {
+	struct Connection ctrl;
 	struct RecvBuf rb;
+
+	struct Connection data;
 };
 
 struct ErrMsg;

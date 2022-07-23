@@ -392,10 +392,9 @@ static int enter_passive_mode(int fd, struct RecvBuf *rb, char *name,
 	return 0;
 }
 
-int set_transfer_parameters(int fd, struct RecvBuf *rb, struct ErrMsg *err)
+int set_transfer_parameters(int fd, struct RecvBuf *rb, char *name,
+                            char *service, struct ErrMsg *err)
 {
-	char name[3 * 4 + 3 + 1];
-	char service[7];
 	if (enter_passive_mode(fd, rb, name, service, err) < 0)
 		return -1;
 

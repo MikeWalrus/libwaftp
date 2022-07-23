@@ -40,36 +40,67 @@ static int addrinfo_connect(struct addrinfo *addr_info)
 	return 0;
 }
 
+static int try_connect(const char *name, const char *service, int *fd,
+                       struct addrinfo **ai, struct ErrMsg *err)
+{
+	int n;
+	if ((n = getaddrinfo_ftp(name, service, ai)) != 0) {
+		ERR_PRINTF("getaddrinfo: %s", gai_strerror(n));
+		return -1;
+	}
+	*fd = addrinfo_connect(*ai);
+	if (*fd <= 0) {
+		ERR_PRINTF("Cannot connect to %s, %s", name, service);
+		freeaddrinfo(*ai);
+		return -1;
+	}
+	return 0;
+}
+
+static int create_data_connection(struct Connection *data_con,
+                                  const char *ctrl_name, const char *name,
+                                  const char *service, struct ErrMsg *err)
+{
+	if (!*name)
+		name = ctrl_name;
+	if (try_connect(name, service, &data_con->fd, &data_con->addr_info,
+	                err) < 0) {
+		ERR_WHERE_PRINTF("Data Connection");
+		return -1;
+	}
+	debug("[INFO] Data connection established.\n");
+	return 0;
+}
+
 struct UserPI *user_pi_init(const char *name, const char *service,
                             const struct LoginInfo *login,
                             struct UserPI *user_pi, struct ErrMsg *err)
 {
-	int n;
-	struct addrinfo *addr_info;
-	if ((n = getaddrinfo_ftp(name, service, &addr_info)) != 0) {
-		ERR_PRINTF("getaddrinfo: %s", gai_strerror(n));
-		goto fail;
+	int ctrl_fd;
+	struct addrinfo *ctrl_ai;
+	if (try_connect(name, service, &ctrl_fd, &ctrl_ai, err) < 0) {
+		ERR_WHERE_PRINTF("Control Connection");
+		return NULL;
 	}
-	int fd = addrinfo_connect(addr_info);
-	if (fd <= 0) {
-		ERR_PRINTF("Cannot connect to %s, %s", name, service);
-		freeaddrinfo(addr_info);
-		goto fail;
-	}
-	*user_pi = (struct UserPI){ .addr_info = addr_info,
-		                    .name = name,
-		                    .service = service,
-		                    .ctrl_fd = fd };
+	debug("[INFO] Control Connection established.\n");
+	user_pi->ctrl = (struct Connection){ .addr_info = ctrl_ai,
+		                             .name = name,
+		                             .service = service,
+		                             .fd = ctrl_fd };
 	recv_buf_init(&user_pi->rb);
-	if (get_connection_greetings(user_pi->ctrl_fd, &user_pi->rb, err) != 0)
+	if (get_connection_greetings(user_pi->ctrl.fd, &user_pi->rb, err) != 0)
 		return NULL;
-	if (perform_login_sequence(login, fd, &user_pi->rb, err) != 0)
-		return NULL;
-	if (set_transfer_parameters(fd, &user_pi->rb, err) != 0)
+	if (perform_login_sequence(login, user_pi->ctrl.fd, &user_pi->rb,
+	                           err) != 0)
 		return NULL;
 
+	char name_data[3 * 4 + 3 + 1];
+	char service_data[7];
+	if (set_transfer_parameters(user_pi->ctrl.fd, &user_pi->rb, name_data,
+	                            service_data, err) != 0)
+		return NULL;
+	if (create_data_connection(&user_pi->data, user_pi->ctrl.name,
+	                           name_data, service_data, err) < 0)
+		return NULL;
 	return user_pi;
-fail:
-	ERR_WHERE();
-	return NULL;
 }
