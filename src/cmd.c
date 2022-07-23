@@ -15,8 +15,7 @@
 #include "telnet.h"
 
 #define ERR_PRINTF_REPLY(reply, fmt, ...)                                      \
-	ERR_PRINTF(fmt " (%d%d%d)", ##__VA_ARGS__, reply.first, reply.second,  \
-	           reply.third)
+	ERR_PRINTF(fmt " (%s)", ##__VA_ARGS__, reply)
 
 enum GetReplyResult {
 	GET_REPLY_NETWORK_ERROR, // errno
@@ -167,11 +166,11 @@ int get_connection_greetings(int fd, struct RecvBuf *rb, struct ErrMsg *err)
 		if (first == POS_COM)
 			return 0;
 		if (first == NEG_TRAN_COM) {
-			ERR_PRINTF_REPLY(reply,
+			ERR_PRINTF_REPLY(reply.short_reply,
 			                 "The server says it's unavailable.")
 			goto fail;
 		}
-		ERR_PRINTF_REPLY(reply, "Unexpected reply.");
+		ERR_PRINTF_REPLY(reply.short_reply, "Unexpected reply.");
 		goto fail;
 	}
 fail:
@@ -215,7 +214,7 @@ int perform_login_sequence(const struct LoginInfo *l, int fd,
 	struct Reply reply;
 	const char *cmd;
 	const char *info;
-	enum ReplyCode1 first;
+	enum ReplyCode1 *first = &reply.first;
 	// USER cmd
 	if (!l->username) {
 		info = "A username";
@@ -224,12 +223,11 @@ int perform_login_sequence(const struct LoginInfo *l, int fd,
 	if (send_command(fd, &reply, err, "USER %s", l->username) < 0)
 		return -1;
 	cmd = "USER";
-	first = reply.first;
-	if (first == POS_COM)
+	if (*first == POS_COM)
 		goto succeed;
-	if (first == POS_PRE)
+	if (*first == POS_PRE)
 		goto error;
-	if (first == NEG_TRAN_COM || first == NEG_PERM_COM) {
+	if (*first == NEG_TRAN_COM || *first == NEG_PERM_COM) {
 		ERR_PRINTF_REPLY(
 			reply,
 			"Failure: Login failed after sending the username \"%s\".",
@@ -237,7 +235,7 @@ int perform_login_sequence(const struct LoginInfo *l, int fd,
 		// TODO: Extract more information from the reply.
 		goto fail;
 	}
-	if (first != POS_INT) {
+	if (*first != POS_INT) {
 		ERR_PRINTF_REPLY(
 			reply,
 			"Unexpected reply after sending the username \"%s\".",
@@ -254,19 +252,18 @@ int perform_login_sequence(const struct LoginInfo *l, int fd,
 	if (send_command(fd, &reply, err, "PASS %s", l->password) < 0)
 		return -1;
 	cmd = "PASS";
-	first = reply.first;
-	if (first == POS_COM)
+	if (*first == POS_COM)
 		goto succeed;
-	if (first == POS_PRE)
+	if (*first == POS_PRE)
 		goto error;
-	if (first == NEG_TRAN_COM || first == NEG_PERM_COM) {
+	if (*first == NEG_TRAN_COM || *first == NEG_PERM_COM) {
 		ERR_PRINTF_REPLY(
 			reply,
 			"Failure: Login failed after sending the password.");
 		// TODO: Extract more information from the reply.
 		goto fail;
 	}
-	if (first != POS_INT) {
+	if (*first != POS_INT) {
 		ERR_PRINTF_REPLY(
 			reply, "Unexpected reply after sending the password.");
 		goto fail;
@@ -281,26 +278,24 @@ int perform_login_sequence(const struct LoginInfo *l, int fd,
 	if (send_command(fd, &reply, err, "ACCT %s", l->account_info) < 0)
 		return -1;
 	cmd = "ACCT";
-	first = reply.first;
-	if (first == POS_COM)
+	if (*first == POS_COM)
 		goto succeed;
-	if (first == POS_PRE || first == POS_INT)
+	if (*first == POS_PRE || *first == POS_INT)
 		goto error;
-	if (first == NEG_TRAN_COM || first == NEG_PERM_COM) {
+	if (*first == NEG_TRAN_COM || *first == NEG_PERM_COM) {
 		ERR_PRINTF_REPLY(
-			reply,
+			reply.short_reply,
 			"Failure: Login failed after sending the account information.");
-		// TODO: Extract more information from the reply.
 		goto fail;
 	}
-
 	return 0;
 info_needed:
-	ERR_PRINTF_REPLY(reply, "%s is needed to log into this server.", info);
+	ERR_PRINTF_REPLY(reply.short_reply,
+	                 "%s is needed to log into this server.", info);
 	goto fail;
 error:
 	ERR_PRINTF_REPLY(
-		reply,
+		reply.short_reply,
 		"Error: The server shouldn't send this reply to my %s command.",
 		cmd);
 fail:
@@ -377,13 +372,65 @@ int parse_pasv_reply(const char *reply, size_t len, char *name, char *service)
 #undef RETURN_IF_OUT_OF_BOUND
 }
 
-int set_transfer_parameters(int fd, struct RecvBuf *rb, struct ErrMsg *err)
+enum State { SUCCESS, FAILURE, ERROR };
+
+static inline enum State generic_reply_next_state(struct Reply *reply)
+{
+	enum ReplyCode1 *first = &reply->first;
+	if (*first == POS_COM)
+		return SUCCESS;
+	if (*first == POS_PRE || *first == POS_INT)
+		return ERROR;
+	if (*first == NEG_TRAN_COM || *first == NEG_PERM_COM)
+		return FAILURE;
+	__builtin_unreachable();
+}
+
+static int generic_reply_validate(struct Reply *reply, struct ErrMsg *err,
+                                  const char *cmd, const char *desc)
+{
+	enum State next = generic_reply_next_state(reply);
+	if (next == POS_COM)
+		return 0;
+	if (next == ERROR) {
+		ERR_PRINTF_REPLY(
+			reply->short_reply,
+			"The server shouldn't send this reply to my %s command",
+			cmd);
+		ERR_WHERE_PRINTF("%s|error", cmd);
+		return -1;
+	}
+	if (next == FAILURE) {
+		ERR_PRINTF_REPLY(reply->short_reply, "%s", desc);
+		ERR_WHERE_PRINTF("%s|failure", cmd);
+		return -1;
+	}
+	__builtin_unreachable();
+}
+
+int enter_passive_mode_pasv(int fd, struct RecvBuf *rb, char *name,
+                            char *service, struct ErrMsg *err)
 {
 	struct Reply reply;
 	if (send_pasv(fd, &reply, err) < 0)
 		return -1;
+	if (generic_reply_validate(&reply, err, "PASV",
+	                           "Cannot enter passive mode.") < 0)
+		return -1;
+	if (parse_pasv_reply(reply.short_reply, reply.short_reply_len, name,
+	                     service) < 0) {
+		ERR_PRINTF("Cannot parse the reply: %s", reply.short_reply);
+		ERR_WHERE();
+		return -1;
+	}
 	return 0;
-fail:
-	ERR_WHERE();
-	return -1;
+}
+
+int set_transfer_parameters(int fd, struct RecvBuf *rb, struct ErrMsg *err)
+{
+	char name[3 * 4 + 3 + 1];
+	char service[7];
+	if (enter_passive_mode_pasv(fd, rb, name, service, err) < 0)
+		return -1;
+	return 0;
 }

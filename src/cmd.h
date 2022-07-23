@@ -61,6 +61,8 @@ int get_connection_greetings(int fd, struct RecvBuf *rb, struct ErrMsg *err);
 int perform_login_sequence(const struct LoginInfo *l, int fd,
                            struct RecvBuf *rb, struct ErrMsg *err);
 
+int set_transfer_parameters(int fd, struct RecvBuf *rb, struct ErrMsg *err);
+
 #define DECL_SEND_CMD(name, cmd)                                               \
 	static inline int send_##name(int fd, struct Reply *reply,             \
 	                              struct ErrMsg *err)                      \

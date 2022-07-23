@@ -65,6 +65,8 @@ struct UserPI *user_pi_init(const char *name, const char *service,
 		return NULL;
 	if (perform_login_sequence(login, fd, &user_pi->rb, err) != 0)
 		return NULL;
+	if (set_transfer_parameters(fd, &user_pi->rb, err) != 0)
+		return NULL;
 
 	return user_pi;
 fail:
