@@ -330,6 +330,11 @@ static inline enum State generic_reply_next_state(struct Reply *reply)
 	__builtin_unreachable();
 }
 
+/**
+ *  Suitable for:
+ *  ABOR, ALLO, DELE, CWD, CDUP, SMNT, HELP, MODE, NOOP, PASV,
+ *  QUIT, SITE, PORT, SYST, STAT, RMD, MKD, PWD, STRU, and TYPE.
+ */
 static int generic_reply_validate(struct Reply *reply, struct ErrMsg *err,
                                   const char *cmd, const char *desc)
 {
@@ -352,8 +357,8 @@ static int generic_reply_validate(struct Reply *reply, struct ErrMsg *err,
 	__builtin_unreachable();
 }
 
-int enter_passive_mode(int fd, struct RecvBuf *rb, char *name, char *service,
-                       struct ErrMsg *err)
+static int enter_passive_mode(int fd, struct RecvBuf *rb, char *name,
+                              char *service, struct ErrMsg *err)
 {
 	struct Reply reply;
 	const char *cmd;
@@ -393,5 +398,23 @@ int set_transfer_parameters(int fd, struct RecvBuf *rb, struct ErrMsg *err)
 	char service[7];
 	if (enter_passive_mode(fd, rb, name, service, err) < 0)
 		return -1;
+
+	const char *cmd;
+	struct Reply reply;
+
+	// Representation Type: Image
+	cmd = "TYPE I";
+	if (send_command(fd, &reply, err, cmd) < 0)
+		return -1;
+	if (generic_reply_validate(
+		    &reply, err, cmd,
+		    "Cannot set Representation Type to \"Image\".") < 0)
+		return -1;
+
+	// File Structure: File
+	// Do nothing since File is the default structure.
+
+	// Transfer Mode: Block
+	// Do nothing since Stream is the default transfer mode.
 	return 0;
 }
