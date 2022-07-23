@@ -4,7 +4,6 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -12,6 +11,7 @@
 #include "debug.h"
 #include "error.h"
 #include "ftp.h"
+#include "parse.h"
 #include "telnet.h"
 
 #define ERR_PRINTF_REPLY(reply, fmt, ...)                                      \
@@ -37,6 +37,15 @@ static enum GetReplyResult get_reply(int fd, struct RecvBuf *rb,
 
 void get_reply_result_to_err_msg(enum GetReplyResult result, char *err_msg,
                                  size_t len);
+
+static bool is_reply_eq(struct Reply *reply, unsigned int reply_code[3])
+{
+	for (size_t i = 0; i < 3; i++) {
+		if (reply->reply_codes[i] != reply_code[i])
+			return false;
+	}
+	return true;
+}
 
 int send_command(int fd, struct Reply *reply, struct ErrMsg *err,
                  const char *fmt, ...)
@@ -307,71 +316,6 @@ succeed:
 	return 0;
 }
 
-int parse_pasv_reply(const char *reply, size_t len, char *name, char *service)
-{
-	if (len < 5)
-		return -1;
-	const char *ptr = reply + 4;
-	const char *end = reply + len;
-
-#define RETURN_IF_OUT_OF_BOUND()                                               \
-	if (ptr >= end)                                                        \
-		return -1;
-
-	/// Skip "Entering Passive Mode("
-	for (; ptr < end; ptr++) {
-		if (isdigit(*ptr))
-			break;
-	}
-
-	/// "h1,h2,h3,h4,"
-	for (size_t i = 0; i < 4; i++) {
-		RETURN_IF_OUT_OF_BOUND();
-		if (!isdigit(*ptr))
-			return -1;
-		*(name++) = *(ptr++);
-		for (ssize_t j = 0; j < 2; j++) {
-			RETURN_IF_OUT_OF_BOUND();
-			if (!isdigit(*ptr))
-				break;
-			*(name++) = *(ptr++);
-		}
-		RETURN_IF_OUT_OF_BOUND();
-		if (*ptr != ',')
-			return -1;
-		*(name++) = '.';
-		ptr++;
-	}
-	// name = "h1.h2.h3.h4."
-	*(name - 1) = '\0';
-	// name = "h1.h2.h3.h4\0"
-
-	/// "p1,p2"
-	long p1;
-	long p2;
-
-	RETURN_IF_OUT_OF_BOUND();
-	char *endptr;
-	p1 = strtol(ptr, &endptr, 10);
-	if (endptr == ptr)
-		return -1;
-	if (p1 > UINT8_MAX)
-		return -1;
-	ptr = endptr;
-	if (*ptr != ',')
-		return -1;
-	ptr++;
-	p2 = strtol(ptr, &endptr, 10);
-	if (endptr == ptr)
-		return -1;
-	if (p2 > UINT8_MAX)
-		return -1;
-	uint32_t port = (p1 << 8) + p2;
-	sprintf(service, "%d", port);
-	return 0;
-#undef RETURN_IF_OUT_OF_BOUND
-}
-
 enum State { SUCCESS, FAILURE, ERROR };
 
 static inline enum State generic_reply_next_state(struct Reply *reply)
@@ -408,19 +352,36 @@ static int generic_reply_validate(struct Reply *reply, struct ErrMsg *err,
 	__builtin_unreachable();
 }
 
-int enter_passive_mode_pasv(int fd, struct RecvBuf *rb, char *name,
-                            char *service, struct ErrMsg *err)
+int enter_passive_mode(int fd, struct RecvBuf *rb, char *name, char *service,
+                       struct ErrMsg *err)
 {
 	struct Reply reply;
-	if (send_pasv(fd, &reply, err) < 0)
+	const char *cmd;
+	cmd = "EPSV";
+	if (send_command(fd, &reply, err, cmd) < 0)
 		return -1;
-	if (generic_reply_validate(&reply, err, "PASV",
+	if (is_reply_eq(&reply, (unsigned int[]){ 2, 2, 9 })) {
+		if (parse_epsv_reply(reply.short_reply, reply.short_reply_len,
+		                     service) < 0) {
+			ERR_PRINTF("Cannot parse the reply: %s",
+			           reply.short_reply);
+			ERR_WHERE_PRINTF("EPSV");
+			return -1;
+		}
+		*name = '\0';
+		return 0;
+	}
+	debug("[WARNING] EPSV failed. Falling back to PASV");
+	cmd = "PASV";
+	if (send_command(fd, &reply, err, cmd) < 0)
+		return -1;
+	if (generic_reply_validate(&reply, err, cmd,
 	                           "Cannot enter passive mode.") < 0)
 		return -1;
 	if (parse_pasv_reply(reply.short_reply, reply.short_reply_len, name,
 	                     service) < 0) {
 		ERR_PRINTF("Cannot parse the reply: %s", reply.short_reply);
-		ERR_WHERE();
+		ERR_WHERE_PRINTF("PASV");
 		return -1;
 	}
 	return 0;
@@ -430,7 +391,7 @@ int set_transfer_parameters(int fd, struct RecvBuf *rb, struct ErrMsg *err)
 {
 	char name[3 * 4 + 3 + 1];
 	char service[7];
-	if (enter_passive_mode_pasv(fd, rb, name, service, err) < 0)
+	if (enter_passive_mode(fd, rb, name, service, err) < 0)
 		return -1;
 	return 0;
 }

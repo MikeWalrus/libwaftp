@@ -1,8 +1,7 @@
+#include "../src/parse.h"
+
 #include <check.h>
 #include <stdlib.h>
-
-extern int parse_pasv_reply(const char *reply, size_t len, char *name,
-                            char *service);
 
 void parse_pasv_reply_check_valid(const char *reply, char *name, char *service)
 {
@@ -56,15 +55,58 @@ START_TEST(test_parse_pasv_reply_invalid)
 }
 END_TEST
 
+void parse_epsv_reply_check_valid(const char *reply, const char *port)
+{
+	char port_got[6];
+	int ret = parse_epsv_reply(reply, strlen(reply), port_got);
+	ck_assert_msg(ret == 0, "error when parsing reply: %s\n", reply);
+	ck_assert_str_eq(port_got, port);
+}
+
+void parse_epsv_reply_check_invalid(const char *reply)
+{
+	char port_got[6];
+	int ret = parse_epsv_reply(reply, strlen(reply), port_got);
+	ck_assert_msg(ret < 0, "should fail reply: %s\n", reply);
+}
+
+START_TEST(test_parse_epsv_reply_valid)
+{
+	parse_epsv_reply_check_valid(
+		"229 Entering Extended Passive Mode (|||6446|))", "6446");
+	parse_epsv_reply_check_valid(
+		"229 Entering Extended Passive Mode (||||))", "");
+	parse_epsv_reply_check_valid(
+		"229 Entering Extended Passive Mode (|||1|))", "1");
+	parse_epsv_reply_check_valid(
+		"229 Entering Extended Passive Mode (|||12|))", "12");
+}
+END_TEST
+
+START_TEST(test_parse_epsv_reply_invalid)
+{
+	const char *replies[] = {
+		"229", "229 ||||", "229 (|||)",
+		"229 Entering Extended Passive Mode (|1||1234|))"
+	};
+	for (size_t i = 0; i < sizeof(replies) / sizeof(replies[0]); i++) {
+		parse_epsv_reply_check_invalid(replies[i]);
+	}
+}
+END_TEST
+
 Suite *parse_suite(void)
 {
 	Suite *s;
-	TCase *tc;
 	s = suite_create("parse");
-	tc = tcase_create("parse_pasv_reply");
-	tcase_add_test(tc, test_parse_pasv_reply_valid);
-	tcase_add_test(tc, test_parse_pasv_reply_invalid);
-	suite_add_tcase(s, tc);
+	TCase *pasv_tc = tcase_create("parse_pasv_reply");
+	tcase_add_test(pasv_tc, test_parse_pasv_reply_valid);
+	tcase_add_test(pasv_tc, test_parse_pasv_reply_invalid);
+	suite_add_tcase(s, pasv_tc);
+	TCase *epsv_tc = tcase_create("parse_epsv_reply");
+	tcase_add_test(epsv_tc, test_parse_epsv_reply_valid);
+	tcase_add_test(epsv_tc, test_parse_epsv_reply_invalid);
+	suite_add_tcase(s, epsv_tc);
 	return s;
 }
 
