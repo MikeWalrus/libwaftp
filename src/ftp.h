@@ -27,4 +27,7 @@ struct ErrMsg;
 struct UserPI *user_pi_init(const char *name, const char *service,
                             const struct LoginInfo *login,
                             struct UserPI *user_pi, struct ErrMsg *err);
+
+int create_data_connection(struct UserPI *user_pi, struct ErrMsg *err);
+
 #endif

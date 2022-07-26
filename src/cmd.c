@@ -417,3 +417,42 @@ int set_transfer_parameters(int fd, struct RecvBuf *rb, char *name,
 	// Do nothing since Stream is the default transfer mode.
 	return 0;
 }
+
+ssize_t list_directory(struct UserPI *user_pi, char *path, char **list,
+                       struct ErrMsg *err)
+{
+	if (create_data_connection(user_pi, err) < 0)
+		return -1;
+
+	struct Reply reply;
+	enum ReplyCode1 *first = &reply.first;
+	if (send_command(user_pi->ctrl.fd, &reply, err, "MLSD %s", path) < 0)
+		return -1;
+
+	if (*first != POS_PRE) {
+		ERR_PRINTF_REPLY(reply.short_reply,
+		                 "Expected a Positive Preliminary Reply.");
+		goto fail;
+	}
+
+	ssize_t len = recv_all(user_pi->data.fd, list) < 0;
+	debug("[D begin]\n%s[D end]\n", *list);
+	if (len < 0) {
+		strerror_r(errno, err->msg, ERR_MSG_MAX_LEN);
+		goto fail;
+	}
+
+	enum GetReplyResult result =
+		get_reply(user_pi->ctrl.fd, &user_pi->rb, &reply);
+	if (result != GET_REPLY_OK) {
+		get_reply_result_to_err_msg(result, err->msg, LINE_MAX_LEN);
+		goto fail;
+	}
+	if (generic_reply_validate(&reply, err, "MLSD", "Failed to complete.") <
+	    0)
+		return -1;
+	return len;
+fail:
+	ERR_WHERE();
+	return -1;
+}

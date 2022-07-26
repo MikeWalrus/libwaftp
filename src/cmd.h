@@ -40,6 +40,7 @@ struct LoginInfo {
 	const char *account_info;
 };
 
+struct UserPI;
 struct ErrMsg;
 struct RecvBuf;
 
@@ -63,6 +64,9 @@ int perform_login_sequence(const struct LoginInfo *l, int fd,
 
 int set_transfer_parameters(int fd, struct RecvBuf *rb, char *name,
                             char *service, struct ErrMsg *err);
+
+ssize_t list_directory(struct UserPI *user_pi, char *path, char **list,
+                       struct ErrMsg *err);
 
 #define DECL_SEND_CMD(name, cmd)                                               \
 	static inline int send_##name(int fd, struct Reply *reply,             \

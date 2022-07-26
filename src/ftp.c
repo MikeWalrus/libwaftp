@@ -57,9 +57,9 @@ static int try_connect(const char *name, const char *service, int *fd,
 	return 0;
 }
 
-static int create_data_connection(struct Connection *data_con,
-                                  const char *ctrl_name, const char *name,
-                                  const char *service, struct ErrMsg *err)
+static int data_connection_connect(struct Connection *data_con,
+                                   const char *ctrl_name, const char *name,
+                                   const char *service, struct ErrMsg *err)
 {
 	if (!*name)
 		name = ctrl_name;
@@ -68,7 +68,21 @@ static int create_data_connection(struct Connection *data_con,
 		ERR_WHERE_PRINTF("Data Connection");
 		return -1;
 	}
+	freeaddrinfo(data_con->addr_info);
 	debug("[INFO] Data connection established.\n");
+	return 0;
+}
+
+int create_data_connection(struct UserPI *user_pi, struct ErrMsg *err)
+{
+	char name_data[3 * 4 + 3 + 1];
+	char service_data[7];
+	if (set_transfer_parameters(user_pi->ctrl.fd, &user_pi->rb, name_data,
+	                            service_data, err) != 0)
+		return -1;
+	if (data_connection_connect(&user_pi->data, user_pi->ctrl.name,
+	                            name_data, service_data, err) < 0)
+		return -1;
 	return 0;
 }
 
@@ -94,13 +108,5 @@ struct UserPI *user_pi_init(const char *name, const char *service,
 	                           err) != 0)
 		return NULL;
 
-	char name_data[3 * 4 + 3 + 1];
-	char service_data[7];
-	if (set_transfer_parameters(user_pi->ctrl.fd, &user_pi->rb, name_data,
-	                            service_data, err) != 0)
-		return NULL;
-	if (create_data_connection(&user_pi->data, user_pi->ctrl.name,
-	                           name_data, service_data, err) < 0)
-		return NULL;
 	return user_pi;
 }

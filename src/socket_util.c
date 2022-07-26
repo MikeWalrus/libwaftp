@@ -1,5 +1,7 @@
 #include <errno.h>
+#include <stdlib.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
 #include "debug.h"
 #include "socket_util.h"
@@ -88,4 +90,42 @@ ssize_t recv_buf_get_line(struct RecvBuf *rb, int fd, unsigned char *line)
 	*line = 0;
 	n++;
 	return n;
+}
+
+ssize_t recv_all(int fd, char **data)
+{
+#define CHUNK_SIZE 1024
+	size_t received = 0;
+	char *buf = NULL;
+	size_t capacity = CHUNK_SIZE;
+
+	ssize_t n;
+
+	for (;;) {
+		if (received + CHUNK_SIZE + 1 >= capacity) {
+			capacity *= 2;
+			char *new_buf = realloc(buf, capacity);
+			if (!new_buf) {
+				free(buf);
+				return -1;
+			}
+			buf = new_buf;
+		}
+		if ((n = recv(fd, &buf[received], CHUNK_SIZE, MSG_NOSIGNAL)) <
+		    0) {
+			if (errno == EINTR) {
+				continue;
+			}
+			free(buf);
+			return -1;
+		}
+		if (n == 0) {
+			*data = buf;
+			close(fd);
+			buf[received] = '\0';
+			return received;
+		}
+		// n > 0
+		received += n;
+	}
 }

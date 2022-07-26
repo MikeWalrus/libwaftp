@@ -27,4 +27,11 @@ ssize_t recv_buf_get_line(struct RecvBuf *rb, int fd, unsigned char *line);
  */
 ssize_t sendn(int fd, const void *buf, size_t n);
 
+/// Receives \a data from \a fd until the connection is closed.
+/**
+ *  Caller should remember to free the buffer.
+ *  \return -1 if `recv` or memory allocation fails and sets `errno`.
+ */
+ssize_t recv_all(int fd, char **data);
+
 #endif
