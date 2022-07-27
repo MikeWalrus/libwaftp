@@ -6,3 +6,5 @@ libwaftp_la_SOURCES = ftp.c ftp.h \
                       debug.h \
                       error.h \
                       parse.c parse.h
+
+include_HEADERS = libwaftp.h

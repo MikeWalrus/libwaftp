@@ -2,10 +2,10 @@ prefix=@prefix@
 libdir=@libdir@
 includedir=@includedir@
 
-Name: libwaftp
+Name: @PACKAGE_NAME@
 Description: A thread-safe FTP library.
-URL: https://github.com/MikeWalrus/libwaftp
-Version: @VERSION@
-Requires:
-Libs: -L${libdir} -lwaftp
+Version: @PACKAGE_VERSION@
+Libs: -L${libdir} -llibwaftp-@API_VERSION@
 Cflags: -I${includedir}
+Requires: @AX_PACKAGE_REQUIRES@
+Requires.private: @AX_PACKAGE_REQUIRES_PRIVATE@
