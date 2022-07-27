@@ -321,6 +321,7 @@ enum State { SUCCESS, FAILURE, ERROR };
 static inline enum State generic_reply_next_state(struct Reply *reply)
 {
 	enum ReplyCode1 *first = &reply->first;
+	fprintf(stderr, "unreachable: %d\n", *first);
 	if (*first == POS_COM)
 		return SUCCESS;
 	if (*first == POS_PRE || *first == POS_INT)
@@ -339,7 +340,7 @@ static int generic_reply_validate(struct Reply *reply, struct ErrMsg *err,
                                   const char *cmd, const char *desc)
 {
 	enum State next = generic_reply_next_state(reply);
-	if (next == POS_COM)
+	if (next == SUCCESS)
 		return 0;
 	if (next == ERROR) {
 		ERR_PRINTF_REPLY(
