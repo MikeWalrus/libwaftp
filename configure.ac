@@ -15,7 +15,7 @@ AX_CHECK_COMPILE_FLAG([-std=gnu11], [
 ])
 PKG_CHECK_MODULES([CHECK], [check >= 0.9.6])
 AC_CONFIG_HEADERS([config.h])
-AC_CONFIG_FILES([Makefile src/Makefile tests/Makefile])
+AC_CONFIG_FILES([Makefile src/Makefile tests/Makefile libwaftp.pc])
 
 DX_INIT_DOXYGEN([libwaftp])
 

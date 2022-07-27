@@ -1,0 +1,11 @@
+prefix=/usr/local
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libwaftp
+Description: A thread-safe FTP library.
+URL: https://github.com/MikeWalrus/libwaftp
+Version: 0.1
+Requires:
+Libs: -L${libdir} -lwaftp
+Cflags: -I${includedir}

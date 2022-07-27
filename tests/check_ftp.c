@@ -16,7 +16,7 @@ const char SERVER_IP_V4[] = "127.0.0.1";
 const char SERVER_IP_V6[] = "::";
 const char SERVER_PORT[] = "12345";
 const char SERVER_PROGRAM[] = "pure-ftpd";
-const char SERVER_ROOT[] = "server/ftp-root";
+const char SERVER_ROOT[] = FTP_DIR;
 
 const struct LoginInfo anonymous = {
 	.username = "anonymous",
@@ -35,7 +35,7 @@ void exec_server(void)
 	;
 	getcwd(cwd, buf_len);
 
-	snprintf(ftp_anon_dir, buf_len, "FTP_ANON_DIR=%s/%s", cwd, SERVER_ROOT);
+	snprintf(ftp_anon_dir, buf_len, "FTP_ANON_DIR=%s", SERVER_ROOT);
 	printf("starting: %s\n", program_name);
 	const char *const new_argv[] = { SERVER_PROGRAM, "-S", SERVER_PORT,
 		                         NULL };

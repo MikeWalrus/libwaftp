@@ -3,6 +3,7 @@
 *.la
 
 *.tar.gz
+libwaftp-*/
 
 compile_commands.json
 
