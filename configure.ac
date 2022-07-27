@@ -1,6 +1,6 @@
 m4_define([package_version_major],[0])
 m4_define([package_version_minor],[1])
-m4_define([package_version_micro],[0])
+m4_define([package_version_micro],[1])
 m4_define([api_version],[1])
 AC_INIT([libwaftp],
         [package_version_major.package_version_minor.package_version_micro],
