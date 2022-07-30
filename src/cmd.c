@@ -321,7 +321,6 @@ enum State { SUCCESS, FAILURE, ERROR };
 static inline enum State generic_reply_next_state(struct Reply *reply)
 {
 	enum ReplyCode1 *first = &reply->first;
-	fprintf(stderr, "unreachable: %d\n", *first);
 	if (*first == POS_COM)
 		return SUCCESS;
 	if (*first == POS_PRE || *first == POS_INT)
@@ -420,7 +419,7 @@ int set_transfer_parameters(int fd, struct RecvBuf *rb, char *name,
 }
 
 ssize_t list_directory(struct UserPI *user_pi, char *path, char **list,
-                       struct ErrMsg *err)
+                       enum ListFormat *format, struct ErrMsg *err)
 {
 	if (create_data_connection(user_pi, err) < 0)
 		return -1;
@@ -429,11 +428,25 @@ ssize_t list_directory(struct UserPI *user_pi, char *path, char **list,
 	enum ReplyCode1 *first = &reply.first;
 	if (send_command(user_pi->ctrl.fd, &reply, err, "MLSD %s", path) < 0)
 		return -1;
-
+	
+	*format = FORMAT_MLSD;
 	if (*first != POS_PRE) {
 		ERR_PRINTF_REPLY(reply.short_reply,
 		                 "Expected a Positive Preliminary Reply.");
-		goto fail;
+		*format = FORMAT_NLST;
+		char mlsd_err[ERR_MSG_MAX_LEN];
+		strncpy(err->msg, mlsd_err, ERR_MSG_MAX_LEN);
+		debug("[WARNING] Fall back to LIST.\n");
+		if (send_command(user_pi->ctrl.fd, &reply, err, "NLST %s",
+		                 path) < 0)
+			return -1;
+		if (*first != POS_PRE) {
+			ERR_PRINTF_REPLY(
+				reply.short_reply,
+				"Failed to retreive directory listing even using NLST. \n(MLSD: %s)",
+				mlsd_err);
+			goto fail;
+		}
 	}
 
 	ssize_t len = recv_all(user_pi->data.fd, list) < 0;

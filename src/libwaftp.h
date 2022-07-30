@@ -4,8 +4,33 @@
 
 #include <sys/types.h>
 
-struct UserPI;
-struct ErrMsg;
+#define LINE_MAX_LEN 1024
+struct RecvBuf {
+	char buf[LINE_MAX_LEN];
+	char *read_ptr;
+	int remain_count;
+};
+
+struct Connection {
+	const char *name;
+	const char *service;
+	struct addrinfo *addr_info;
+	int fd;
+};
+
+struct UserPI {
+	struct Connection ctrl;
+	struct RecvBuf rb;
+
+	struct Connection data;
+};
+
+struct ErrMsg {
+#define ERR_MSG_MAX_LEN 256
+#define ERR_MSG_WHERE_MAX_LEN 64
+	char where[ERR_MSG_WHERE_MAX_LEN];
+	char msg[ERR_MSG_MAX_LEN];
+};
 
 struct LoginInfo {
 	const char *username;
@@ -21,7 +46,9 @@ struct UserPI *user_pi_init(const char *name, const char *service,
                             const struct LoginInfo *login,
                             struct UserPI *user_pi, struct ErrMsg *err);
 
+enum ListFormat { FORMAT_NLST, FORMAT_MLSD };
+
 ssize_t list_directory(struct UserPI *user_pi, char *path, char **list,
-                       struct ErrMsg *err);
+                       enum ListFormat *format, struct ErrMsg *err);
 
 #endif
