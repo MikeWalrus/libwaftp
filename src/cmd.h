@@ -40,7 +40,7 @@ struct LoginInfo {
 	const char *account_info;
 };
 
-enum ListFormat { FORMAT_NLST, FORMAT_MLSD };
+enum ListFormat { FORMAT_LIST, FORMAT_MLSD };
 
 struct UserPI;
 struct ErrMsg;

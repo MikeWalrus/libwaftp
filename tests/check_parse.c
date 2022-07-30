@@ -2,6 +2,7 @@
 
 #include <check.h>
 #include <stdlib.h>
+#include <time.h>
 
 void parse_pasv_reply_check_valid(const char *reply, char *name, char *service)
 {
@@ -95,6 +96,79 @@ START_TEST(test_parse_epsv_reply_invalid)
 }
 END_TEST
 
+void parse_line_list_gnu_check_valid(const char *line, struct Fact fact_ref,
+                                     struct tm tm_ref)
+{
+	bool ignore = true;
+	const char *ptr = line;
+	struct Fact fact;
+	ck_assert(parse_line_list_gnu(line, &ignore, &ptr, &fact) == 0);
+	ck_assert(!ignore);
+	ck_assert_int_eq(fact.is_dir, fact_ref.is_dir);
+	ck_assert_str_eq(fact.name, fact_ref.name);
+	ck_assert_int_eq(fact.size, fact_ref.size);
+
+	struct tm modify_tm;
+	gmtime_r(&fact.modify, &modify_tm);
+	if (timegm(&tm_ref) != fact.modify) {
+		ck_assert_int_eq(modify_tm.tm_year, tm_ref.tm_year);
+		ck_assert_int_eq(modify_tm.tm_mon, tm_ref.tm_mon);
+		ck_assert_int_eq(modify_tm.tm_min, tm_ref.tm_min);
+		ck_assert_int_eq(modify_tm.tm_hour, tm_ref.tm_hour);
+		ck_assert_int_eq(modify_tm.tm_mday, tm_ref.tm_mday);
+	}
+}
+
+START_TEST(test_parse_list_gnu_reply_valid)
+{
+	parse_line_list_gnu_check_valid(
+		"-rw-r--r--    1 0        0           17864 Oct 23  2003 MISSING-FILES\r\n",
+		(struct Fact){ .is_dir = false,
+	                       .name = "MISSING-FILES",
+	                       .perm = "rw-r--r--",
+	                       .size = 17864 },
+		(struct tm){ .tm_year = 2003 - 1900,
+	                     .tm_mon = 9,
+	                     .tm_mday = 23,
+	                     .tm_hour = 0,
+	                     .tm_min = 0 });
+	parse_line_list_gnu_check_valid(
+		"lrwxrwxrwx    1 0        0               8 Aug 20  2004 CRYPTO.README -> .message\r\n",
+		(struct Fact){
+			.is_dir = false,
+			.name = "CRYPTO.README",
+			.perm = "rwxrwxrwx",
+			.size = -1 }, // We don't know the size since it's a link.
+		(struct tm){ .tm_year = 2004 - 1900,
+	                     .tm_mon = 7,
+	                     .tm_mday = 20,
+	                     .tm_hour = 0,
+	                     .tm_min = 0 });
+	parse_line_list_gnu_check_valid( // NOTE: This test case is time-dependent.
+		"-rw-rw-r--    1 0        3003       465860 Jul 29 21:09 ls-lrRt.txt.gz\r\n",
+		(struct Fact){ .is_dir = false,
+	                       .name = "ls-lrRt.txt.gz",
+	                       .perm = "rw-rw-r--",
+	                       .size = 465860 },
+		(struct tm){ .tm_year = 2022 - 1900,
+	                     .tm_mon = 6,
+	                     .tm_mday = 29,
+	                     .tm_hour = 21,
+	                     .tm_min = 9 });
+	parse_line_list_gnu_check_valid(
+		"drwxr-xr-x    2 0        0            4096 Apr 07  2009 tmp\r\n",
+		(struct Fact){ .is_dir = true,
+	                       .name = "tmp",
+	                       .perm = "drwxr-xr-x",
+	                       .size = 4096 },
+		(struct tm){ .tm_year = 2009 - 1900,
+	                     .tm_mon = 3,
+	                     .tm_mday = 7,
+	                     .tm_hour = 0,
+	                     .tm_min = 0 });
+}
+END_TEST
+
 Suite *parse_suite(void)
 {
 	Suite *s;
@@ -107,6 +181,9 @@ Suite *parse_suite(void)
 	tcase_add_test(epsv_tc, test_parse_epsv_reply_valid);
 	tcase_add_test(epsv_tc, test_parse_epsv_reply_invalid);
 	suite_add_tcase(s, epsv_tc);
+	TCase *list_gnu_tc = tcase_create("parse_list_gnu_reply");
+	tcase_add_test(list_gnu_tc, test_parse_list_gnu_reply_valid);
+	suite_add_tcase(s, list_gnu_tc);
 	return s;
 }
 

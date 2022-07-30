@@ -86,7 +86,8 @@ void check_user_pi_init_valid(const char *name, const char *service)
 	              err.msg);
 	ck_assert_int_gt(user_pi.ctrl.fd, 0);
 	char *list = NULL;
-	list_directory(&user_pi, "", &list, &err);
+	enum ListFormat format;
+	list_directory(&user_pi, "", &list, &format, &err);
 	ck_assert_msg(list != NULL, "[%s] %s", err.where, err.msg);
 	free(list);
 }

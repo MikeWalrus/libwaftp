@@ -428,22 +428,22 @@ ssize_t list_directory(struct UserPI *user_pi, char *path, char **list,
 	enum ReplyCode1 *first = &reply.first;
 	if (send_command(user_pi->ctrl.fd, &reply, err, "MLSD %s", path) < 0)
 		return -1;
-	
+
 	*format = FORMAT_MLSD;
 	if (*first != POS_PRE) {
 		ERR_PRINTF_REPLY(reply.short_reply,
 		                 "Expected a Positive Preliminary Reply.");
-		*format = FORMAT_NLST;
+		*format = FORMAT_LIST;
 		char mlsd_err[ERR_MSG_MAX_LEN];
 		strncpy(err->msg, mlsd_err, ERR_MSG_MAX_LEN);
 		debug("[WARNING] Fall back to LIST.\n");
-		if (send_command(user_pi->ctrl.fd, &reply, err, "NLST %s",
+		if (send_command(user_pi->ctrl.fd, &reply, err, "LIST %s",
 		                 path) < 0)
 			return -1;
 		if (*first != POS_PRE) {
 			ERR_PRINTF_REPLY(
 				reply.short_reply,
-				"Failed to retreive directory listing even using NLST. \n(MLSD: %s)",
+				"Failed to retreive directory listing even using LIST. \n(MLSD: %s)",
 				mlsd_err);
 			goto fail;
 		}
