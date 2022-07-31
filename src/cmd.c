@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 
 #include "cmd.h"
 #include "debug.h"
@@ -518,4 +519,12 @@ ssize_t download_chunk(struct UserPI *user_pi, char *data, size_t size,
 fail:
 	ERR_WHERE();
 	return -1;
+}
+
+void user_pi_quit(struct UserPI *user_pi)
+{
+	struct Reply reply;
+	struct ErrMsg err;
+	send_command(user_pi->ctrl.fd, &reply, &err, "QUIT");
+	shutdown(user_pi->ctrl.fd, SHUT_RDWR);
 }

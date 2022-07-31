@@ -115,7 +115,8 @@ struct UserPI *user_pi_init(const char *name, const char *service,
 int user_pi_clone(const struct UserPI *src, struct UserPI *dest,
                   const struct LoginInfo *login, struct ErrMsg *err)
 {
-	*dest = (struct UserPI){ .ctrl.addr_info = src->ctrl.addr_info };
+	*dest = (struct UserPI){ .ctrl.addr_info = src->ctrl.addr_info,
+		                 .ctrl.name = src->ctrl.name };
 	int fd = addrinfo_connect(dest->ctrl.addr_info);
 	if (fd <= 0) {
 		ERR_PRINTF("Cannot connect to the server.");
@@ -128,4 +129,10 @@ int user_pi_clone(const struct UserPI *src, struct UserPI *dest,
 	if (perform_login_sequence(login, dest->ctrl.fd, &dest->rb, err) != 0)
 		return -1;
 	return 0;
+}
+
+void user_pi_drop(struct UserPI *user_pi)
+{
+	user_pi_quit(user_pi);
+	freeaddrinfo(user_pi->ctrl.addr_info);
 }

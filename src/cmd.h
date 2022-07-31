@@ -75,6 +75,6 @@ int download_init(struct UserPI *user_pi, char *path, struct ErrMsg *err);
 ssize_t download_chunk(struct UserPI *user_pi, char *data, size_t size,
                        struct ErrMsg *err);
 
-#undef DECL_SEND_CMD
+void user_pi_quit(struct UserPI *user_pi);
 
 #endif

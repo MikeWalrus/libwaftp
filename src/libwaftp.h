@@ -73,4 +73,12 @@ int download_init(struct UserPI *user_pi, char *path, struct ErrMsg *err);
 ssize_t download_chunk(struct UserPI *user_pi, char *data, size_t size,
                        struct ErrMsg *err);
 
+void user_pi_drop(struct UserPI *user_pi);
+
+void user_pi_quit(struct UserPI *user_pi);
+
+// addr_info still belongs to \a src
+int user_pi_clone(const struct UserPI *src, struct UserPI *dest,
+                  const struct LoginInfo *login, struct ErrMsg *err);
+
 #endif
