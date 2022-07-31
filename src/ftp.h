@@ -30,4 +30,8 @@ struct UserPI *user_pi_init(const char *name, const char *service,
 
 int create_data_connection(struct UserPI *user_pi, struct ErrMsg *err);
 
+// addr_info still belongs to \a src
+int user_pi_clone(const struct UserPI *src, struct UserPI *dest,
+                  const struct LoginInfo *login, struct ErrMsg *err);
+
 #endif

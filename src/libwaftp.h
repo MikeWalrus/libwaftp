@@ -62,7 +62,15 @@ struct Fact {
 	time_t modify;
 };
 
+typedef int (*ParseLineListFunc)(const char *list, bool *ignore,
+                                 const char **end, struct Fact *fact);
+
 int parse_line_list_gnu(const char *list, bool *ignore, const char **end,
                         struct Fact *fact);
+
+int download_init(struct UserPI *user_pi, char *path, struct ErrMsg *err);
+
+ssize_t download_chunk(struct UserPI *user_pi, char *data, size_t size,
+                       struct ErrMsg *err);
 
 #endif

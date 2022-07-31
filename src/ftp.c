@@ -110,3 +110,22 @@ struct UserPI *user_pi_init(const char *name, const char *service,
 
 	return user_pi;
 }
+
+// addr_info still belongs to \a src
+int user_pi_clone(const struct UserPI *src, struct UserPI *dest,
+                  const struct LoginInfo *login, struct ErrMsg *err)
+{
+	*dest = (struct UserPI){ .ctrl.addr_info = src->ctrl.addr_info };
+	int fd = addrinfo_connect(dest->ctrl.addr_info);
+	if (fd <= 0) {
+		ERR_PRINTF("Cannot connect to the server.");
+		ERR_WHERE();
+	}
+	dest->ctrl.fd = fd;
+	recv_buf_init(&dest->rb);
+	if (get_connection_greetings(dest->ctrl.fd, &dest->rb, err) != 0)
+		return -1;
+	if (perform_login_sequence(login, dest->ctrl.fd, &dest->rb, err) != 0)
+		return -1;
+	return 0;
+}

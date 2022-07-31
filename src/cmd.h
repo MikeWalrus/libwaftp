@@ -70,14 +70,10 @@ int set_transfer_parameters(int fd, struct RecvBuf *rb, char *name,
 ssize_t list_directory(struct UserPI *user_pi, char *path, char **list,
                        enum ListFormat *format, struct ErrMsg *err);
 
-#define DECL_SEND_CMD(name, cmd)                                               \
-	static inline int send_##name(int fd, struct Reply *reply,             \
-	                              struct ErrMsg *err)                      \
-	{                                                                      \
-		return send_command(fd, reply, err, cmd);                      \
-	}
+int download_init(struct UserPI *user_pi, char *path, struct ErrMsg *err);
 
-DECL_SEND_CMD(pasv, "PASV");
+ssize_t download_chunk(struct UserPI *user_pi, char *data, size_t size,
+                       struct ErrMsg *err);
 
 #undef DECL_SEND_CMD
 

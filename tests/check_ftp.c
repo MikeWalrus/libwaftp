@@ -90,6 +90,18 @@ void check_user_pi_init_valid(const char *name, const char *service)
 	list_directory(&user_pi, "", &list, &format, &err);
 	ck_assert_msg(list != NULL, "[%s] %s", err.where, err.msg);
 	free(list);
+	struct UserPI clone;
+	int result = user_pi_clone(&user_pi, &clone, &anonymous, &err);
+	ck_assert_msg(result == 0, "[%s] %s", err.where, err.msg);
+	ck_assert(download_init(&clone, "file", &err) == 0);
+	for (;;) {
+		const size_t chunk = 1024;
+		char buf[chunk];
+		ssize_t n = download_chunk(&clone, buf, chunk, &err);
+		ck_assert(n >= 0);
+		if (n == 0)
+			break;
+	}
 }
 
 void setup(void)

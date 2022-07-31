@@ -34,4 +34,6 @@ ssize_t sendn(int fd, const void *buf, size_t n);
  */
 ssize_t recv_all(int fd, char **data);
 
+ssize_t try_recv(int fd, char *buf, size_t size);
+
 #endif

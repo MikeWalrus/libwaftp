@@ -25,6 +25,19 @@ ssize_t sendn(int fd, const void *buf, size_t n)
 	return n;
 }
 
+ssize_t try_recv(int fd, char *buf, size_t size)
+{
+	for (;;) {
+		ssize_t n = recv(fd, buf, size, MSG_NOSIGNAL);
+		if (n < 0) {
+			if (errno != EINTR)
+				return -1;
+			continue;
+		}
+		return n;
+	}
+}
+
 void recv_buf_init(struct RecvBuf *rb)
 {
 	rb->remain_count = 0;
